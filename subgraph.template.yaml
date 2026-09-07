@@ -1,0 +1,30 @@
+specVersion: 1.3.0
+schema:
+  file: ../../schema.graphql
+features:
+  - fullTextSearch
+indexerHints:
+  prune: auto
+dataSources:
+  - kind: ethereum
+    name: AgenticCommerce
+    network: { { network } }
+    source:
+      address: "{{agenticCommerceAddress}}"
+      abi: AgenticCommerce
+      startBlock: { { agenticCommerceStartBlock } }
+    context:
+      chainId:
+        type: BigInt
+        data: "{{chainId}}"
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        -
+      abis:
+        - name: AgenticCommerce
+          file: ../../abis/AgenticCommerce.json
+      eventHandlers:
+      file: ../../src/mapping.ts

@@ -1,0 +1,31 @@
+{
+  "name": "erc-8183-subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run typecheck && bun run ./scripts/deploy.ts sepolia --build-only",
+    "deploy": "bun run ./scripts/deploy.ts",
+    "prepare": "vp config",
+    "ready": "vp check && vp run build && vp run test",
+    "test": "graph test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "0.98.1",
+    "@graphprotocol/graph-ts": "0.38.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "matchstick-as": "^0.6.0",
+    "typescript": "^5.9.3",
+    "vite-plus": "0.3.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.3.14",
+      "onFail": "download"
+    }
+  }
+}
