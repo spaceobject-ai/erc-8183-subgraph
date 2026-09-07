@@ -1,0 +1,788 @@
+# ERC-8183 (Agentic Commerce Protocol) subgraph schema.
+#
+# Modelled on the reference implementation at
+# https://github.com/erc-8183/base-contracts/blob/main/contracts/ERC8183.sol
+#
+# Conventions (shared with spaceobject-ai/erc-8004-subgraph):
+#   - Mutable state entities carry lifecycle fields: `createdAt` / `createdAtBlock` /
+#     `createdAtTransaction` and `updatedAt` / `updatedAtBlock` / `updatedAtTransaction`.
+#   - Immutable log-derived records carry the bare quartet:
+#     `blockNumber` / `timestamp` / `transactionHash` / `logIndex`, and use
+#     transaction hash + log index as their ID.
+#   - `Bytes` IDs everywhere; `Timestamp` for wall-clock, `BigInt` for block numbers,
+#     token amounts and contract-supplied deadlines.
+#   - Amounts are always paired with the paying `PaymentToken`; never summed across tokens.
+
+# Full-text search over the only free-form string the contract stores: the job description
+# supplied to `createJob`. It is written once at creation and never mutated.
+type _Schema_
+  @fulltext(
+    name: "jobSearch"
+    language: en
+    algorithm: rank
+    include: [{ entity: "Job", fields: [{ name: "description" }] }]
+  )
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+# Mirrors the contract's `JobStatus`: Open -> Funded -> Submitted -> Completed | Rejected | Expired.
+enum JobStatus {
+  OPEN
+  FUNDED
+  SUBMITTED
+  COMPLETED
+  REJECTED
+  EXPIRED
+}
+
+# A milestone claim proposed with `submitClaim`. Only one claim per job may be PENDING.
+# SUPERSEDED covers the two implicit clears, where the contract emits `ClaimRejected`
+# with a synthetic reason: a new `submit` ("superseded-by-submit") and a job-level `reject`.
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+# Which call produced the `Settled` accounting event.
+# `settleClaim` pays without a pending claim; `approveClaim` consumes one.
+enum SettlementKind {
+  SETTLE_CLAIM
+  APPROVE_CLAIM
+}
+
+# Lifecycle action that triggered a payout. Recoverable from the `bytes4 selector`
+# carried by `Disbursed`, and otherwise inferred by the mapping from the handler that
+# observed the release.
+enum PayoutTrigger {
+  COMPLETE
+  SETTLE_CLAIM
+  APPROVE_CLAIM
+}
+
+enum FeeKind {
+  PLATFORM
+  EVALUATOR
+}
+
+# `Refunded` is emitted from `_reject` and from `claimRefund`; the cause distinguishes them.
+enum RefundCause {
+  JOB_REJECTED
+  JOB_EXPIRED
+}
+
+enum RoleChangeKind {
+  GRANTED
+  REVOKED
+}
+
+# ---------------------------------------------------------------------------
+# Protocol
+# ---------------------------------------------------------------------------
+
+# Singleton for the ERC-8183 deployment being indexed. ID: the contract (proxy) address.
+type AgenticCommerce @entity(immutable: false) {
+  id: Bytes!
+  network: String!
+  chainId: BigInt!
+  address: String!
+
+  # Current implementation behind the UUPS proxy, from `Upgraded`.
+  implementation: Bytes
+
+  # Admin-controlled configuration.
+  platformTreasury: Bytes
+  platformFeeBP: BigInt!
+  evaluatorFeeBP: BigInt!
+  evaluationGracePeriod: BigInt!
+  paused: Boolean!
+
+  # Counters. Status counters are mutually exclusive and sum to `jobCount`.
+  jobCount: BigInt!
+  openJobCount: BigInt!
+  fundedJobCount: BigInt!
+  submittedJobCount: BigInt!
+  completedJobCount: BigInt!
+  rejectedJobCount: BigInt!
+  expiredJobCount: BigInt!
+  claimCount: BigInt!
+  settlementCount: BigInt!
+
+  createdAt: Timestamp!
+  createdAtBlock: BigInt!
+  createdAtTransaction: Bytes!
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+
+  jobs: [Job!]! @derivedFrom(field: "protocol")
+  paymentTokens: [PaymentToken!]! @derivedFrom(field: "protocol")
+  hooks: [Hook!]! @derivedFrom(field: "protocol")
+  roles: [Role!]! @derivedFrom(field: "protocol")
+  upgrades: [Upgrade!]! @derivedFrom(field: "protocol")
+  pauseChanges: [PauseChange!]! @derivedFrom(field: "protocol")
+  platformFeeChanges: [PlatformFeeChange!]! @derivedFrom(field: "protocol")
+  evaluatorFeeChanges: [EvaluatorFeeChange!]! @derivedFrom(field: "protocol")
+  emergencyWithdrawals: [EmergencyWithdrawal!]! @derivedFrom(field: "protocol")
+}
+
+# Any address that has appeared in a job or a payment. ID: the address.
+# Holds no state of its own — it exists to give every participant a stable node
+# with reverse lookups into the roles it plays.
+type Account @entity(immutable: false) {
+  id: Bytes!
+
+  clientJobs: [Job!]! @derivedFrom(field: "client")
+  providerJobs: [Job!]! @derivedFrom(field: "provider")
+  evaluatorJobs: [Job!]! @derivedFrom(field: "evaluator")
+  payoutJobs: [Job!]! @derivedFrom(field: "payoutReceiver")
+
+  claims: [Claim!]! @derivedFrom(field: "provider")
+  settlements: [Settlement!]! @derivedFrom(field: "actor")
+  paymentsReceived: [PaymentRelease!]! @derivedFrom(field: "recipient")
+  feesReceived: [FeePayment!]! @derivedFrom(field: "recipient")
+  refundsReceived: [Refund!]! @derivedFrom(field: "client")
+  disbursements: [Disbursement!]! @derivedFrom(field: "receiver")
+  roleAssignments: [RoleAssignment!]! @derivedFrom(field: "account")
+}
+
+# An ERC-20 on the `allowedPaymentTokens` allowlist, or one that has appeared as a
+# job's `paymentToken`. ID: the token address.
+# All volume figures are denominated in this token's own units.
+type PaymentToken @entity(immutable: false) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  allowed: Boolean!
+
+  jobCount: BigInt!
+  fundedAmount: BigInt!
+  settledAmount: BigInt!
+  releasedAmount: BigInt!
+  platformFeesPaid: BigInt!
+  evaluatorFeesPaid: BigInt!
+  refundedAmount: BigInt!
+  emergencyWithdrawnAmount: BigInt!
+
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+
+  jobs: [Job!]! @derivedFrom(field: "paymentToken")
+  allowlistChanges: [PaymentTokenAllowlistChange!]! @derivedFrom(field: "token")
+}
+
+# An `IERC8183Hook` that has been whitelisted or attached to a job. ID: the hook address.
+# A job with the zero-address hook is a plain escrow and stores no `Hook` reference.
+type Hook @entity(immutable: false) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  whitelisted: Boolean!
+
+  jobCount: BigInt!
+  detachedJobCount: BigInt!
+
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+
+  jobs: [Job!]! @derivedFrom(field: "hook")
+  whitelistChanges: [HookWhitelistChange!]! @derivedFrom(field: "hook")
+  detachments: [HookDetachment!]! @derivedFrom(field: "hook")
+}
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+
+# The core escrow record. ID: contract address + `jobId` as big-endian bytes,
+# so a single subgraph can index several ERC-8183 deployments on one chain.
+type Job @entity(immutable: false) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  jobId: BigInt!
+  status: JobStatus!
+
+  # Parties. `provider` is null until `createJob`/`setProvider` supplies a non-zero
+  # address; `evaluator` and `payoutReceiver` are null when left at the zero address
+  # (payouts then go to `provider`).
+  client: Account!
+  provider: Account
+  evaluator: Account
+  payoutReceiver: Account
+
+  # Optional ERC-8004 agent identity for the provider. Not used in any authorization
+  # check by the contract — it is an external identity reference only.
+  providerAgentId: BigInt
+
+  # Money. `paymentToken` and `budget` are unset until `setBudget`; `fundedAmount` is the
+  # balance delta actually observed by `fund`. `remainingAmount` is `budget - settledAmount`,
+  # the figure the contract pays out on `complete` and refunds on reject/expiry.
+  paymentToken: PaymentToken
+  budget: BigInt!
+  fundedAmount: BigInt!
+  settledAmount: BigInt!
+  remainingAmount: BigInt!
+  releasedAmount: BigInt!
+  platformFeesPaid: BigInt!
+  evaluatorFeesPaid: BigInt!
+  refundedAmount: BigInt!
+
+  description: String!
+
+  # Optional hook. `hookDetached` records an admin `batchDetachHook` on an in-flight job
+  # after the hook was de-whitelisted; the reference is kept for history.
+  hook: Hook
+  hookDetached: Boolean!
+
+  # Contract's `expiredAt`: the unix timestamp after which the job can be expired.
+  # `claimRefund` on a SUBMITTED job must additionally wait
+  # `expiresAt + AgenticCommerce.evaluationGracePeriod`.
+  expiresAt: BigInt!
+
+  # Latest deliverable hash from `submit`, and the `bytes32 reason` from `complete`/`reject`.
+  deliverable: Bytes
+  completionReason: Bytes
+  rejectionReason: Bytes
+
+  # The single outstanding `submitClaim`, if any. Cleared on approve, reject, submit and job reject.
+  pendingClaim: Claim
+  claimCount: BigInt!
+  settlementCount: BigInt!
+
+  createdAt: Timestamp!
+  createdAtBlock: BigInt!
+  createdAtTransaction: Bytes!
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+
+  # Status transition timestamps, null until the transition happens.
+  # `submittedAt` doubles as the contract's own `submittedAt` field.
+  fundedAt: Timestamp
+  submittedAt: Timestamp
+  completedAt: Timestamp
+  rejectedAt: Timestamp
+  expiredAt: Timestamp
+
+  statusChanges: [JobStatusChange!]! @derivedFrom(field: "job")
+  providerAssignments: [ProviderAssignment!]! @derivedFrom(field: "job")
+  payoutReceiverChanges: [PayoutReceiverChange!]! @derivedFrom(field: "job")
+  budgetChanges: [BudgetChange!]! @derivedFrom(field: "job")
+  fundings: [JobFunding!]! @derivedFrom(field: "job")
+  claims: [Claim!]! @derivedFrom(field: "job")
+  settlements: [Settlement!]! @derivedFrom(field: "job")
+  payments: [PaymentRelease!]! @derivedFrom(field: "job")
+  feePayments: [FeePayment!]! @derivedFrom(field: "job")
+  disbursements: [Disbursement!]! @derivedFrom(field: "job")
+  refunds: [Refund!]! @derivedFrom(field: "job")
+  hookDetachments: [HookDetachment!]! @derivedFrom(field: "job")
+}
+
+# One row per `JobStatus` transition, including the initial OPEN written by `createJob`
+# (where `previousStatus` is null). Reasons come from `JobCompleted` / `JobRejected`;
+# `JobExpired` carries none.
+type JobStatusChange @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  previousStatus: JobStatus
+  newStatus: JobStatus!
+
+  # Transaction sender. `claimRefund` is callable by anyone, so this is not necessarily a party.
+  actor: Account!
+  reason: Bytes
+  deliverable: Bytes
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `ProviderSet`, emitted by `createJob` with a provider and by `setProvider`.
+type ProviderAssignment @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  provider: Account!
+  agentId: BigInt!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `PayoutReceiverSet`. A zero `payoutReceiver` resets payouts to the provider.
+type PayoutReceiverChange @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  payoutReceiver: Account
+  previousPayoutReceiver: Account
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `BudgetSet`, which fixes both the payment token and the amount before funding.
+type BudgetChange @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  token: PaymentToken!
+  amount: BigInt!
+  previousToken: PaymentToken
+  previousAmount: BigInt!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `JobFunded`. `amount` is the balance delta the contract observed, which it requires to
+# equal the budget (`UnexpectedFundedAmount` otherwise) — so fee-on-transfer tokens cannot fund.
+type JobFunding @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  client: Account!
+  token: PaymentToken!
+  amount: BigInt!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---------------------------------------------------------------------------
+# Milestone claims and settlements
+# ---------------------------------------------------------------------------
+
+# A provider claim proposed with `submitClaim`. Mutable, because a PENDING claim is later
+# approved, rejected or superseded.
+#
+# ID: job ID + `claimIndex` as big-endian bytes. The `ClaimSubmitted` event carries no
+# identifier of its own, so the mapping assigns the per-job sequence number.
+type Claim @entity(immutable: false) {
+  id: Bytes!
+  job: Job!
+  claimIndex: BigInt!
+  status: ClaimStatus!
+  provider: Account!
+
+  # `cumulativeAmount` is a high-water mark, not an increment. `delta` is
+  # `cumulativeAmount - job.settledAmount` at submission — the newly payable slice.
+  cumulativeAmount: BigInt!
+  delta: BigInt!
+
+  deliverable: Bytes!
+
+  # Raw `optParams` preimage, emitted only by `ClaimSubmitted` so observers can reproduce
+  # the claim hash. Part of the replay-protection tuple alongside amount and deliverable.
+  optParams: Bytes!
+
+  # `keccak256` claim hash, when the mapping reproduces the contract's `_claimHash`.
+  claimHash: Bytes
+
+  # Who resolved it. `approveClaim` allows the client or evaluator; `rejectClaim`
+  # additionally allows the provider withdrawing its own claim.
+  resolvedBy: Account
+  rejectionReason: Bytes
+
+  # Set when the claim was approved and paid.
+  settlement: Settlement
+
+  submittedAt: Timestamp!
+  submittedAtBlock: BigInt!
+  submittedAtTransaction: Bytes!
+  submittedAtLogIndex: BigInt!
+  resolvedAt: Timestamp
+  resolvedAtBlock: BigInt
+  resolvedAtTransaction: Bytes
+}
+
+# The `Settled` accounting event, emitted by `settleClaim` and `approveClaim` — the two
+# calls that advance `settledAmount` mid-job. Final payment on `complete` is not a
+# settlement; it appears only as `PaymentRelease` and `FeePayment`.
+type Settlement @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  settlementIndex: BigInt!
+  kind: SettlementKind!
+
+  # Client for SETTLE_CLAIM; client or evaluator for APPROVE_CLAIM.
+  actor: Account!
+
+  # For SETTLE_CLAIM this is the client's settlement attestation rather than a
+  # provider-signed claim hash.
+  deliverable: Bytes!
+
+  cumulativeAmount: BigInt!
+  delta: BigInt!
+
+  token: PaymentToken!
+  netAmount: BigInt!
+  platformFee: BigInt!
+  evaluatorFee: BigInt!
+
+  # Null for SETTLE_CLAIM, which needs no pending claim.
+  claim: Claim
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+
+  payments: [PaymentRelease!]! @derivedFrom(field: "settlement")
+  feePayments: [FeePayment!]! @derivedFrom(field: "settlement")
+}
+
+# ---------------------------------------------------------------------------
+# Money movement
+# ---------------------------------------------------------------------------
+
+# `PaymentReleased`, emitted from `_payout` whenever the net amount is non-zero.
+# `recipient` is the job's `payoutReceiver`, falling back to `provider`.
+type PaymentRelease @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  recipient: Account!
+  token: PaymentToken!
+  amount: BigInt!
+
+  # Filled when the mapping can attribute the release to a settlement in the same
+  # transaction; null for the final payout on `complete`.
+  settlement: Settlement
+  trigger: PayoutTrigger
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `PlatformFeePaid` and `EvaluatorFeePaid`, each `(amount * feeBP) / 10000` of the slice
+# being paid. Both are skipped when the computed fee rounds to zero.
+type FeePayment @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  kind: FeeKind!
+  recipient: Account!
+  token: PaymentToken!
+  amount: BigInt!
+  feeBP: BigInt!
+
+  settlement: Settlement
+  trigger: PayoutTrigger
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `Disbursed`, emitted after `PaymentReleased` when the recipient has code and passes the
+# ERC-165 check for `IDisburser`. `selector` is the `bytes4` of the lifecycle call that paid.
+type Disbursement @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  receiver: Account!
+  selector: Bytes!
+  trigger: PayoutTrigger
+  token: PaymentToken!
+  amount: BigInt!
+
+  payment: PaymentRelease
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `Refunded`, returning `budget - settledAmount` to the client from `reject` or `claimRefund`.
+type Refund @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  client: Account!
+  token: PaymentToken!
+  amount: BigInt!
+  cause: RefundCause!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---------------------------------------------------------------------------
+# Administration
+# ---------------------------------------------------------------------------
+
+type HookWhitelistChange @entity(immutable: true) {
+  id: Bytes!
+  hook: Hook!
+  whitelisted: Boolean!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `HookDetached`, from `batchDetachHook` on an in-flight job whose hook lost its whitelisting.
+type HookDetachment @entity(immutable: true) {
+  id: Bytes!
+  job: Job!
+  hook: Hook!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+type PaymentTokenAllowlistChange @entity(immutable: true) {
+  id: Bytes!
+  token: PaymentToken!
+  allowed: Boolean!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `PlatformFeeUpdated`, which sets the fee and the treasury together.
+type PlatformFeeChange @entity(immutable: true) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  feeBP: BigInt!
+  treasury: Bytes!
+  previousFeeBP: BigInt!
+  previousTreasury: Bytes
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `EvaluatorFeeUpdated`. Platform and evaluator fees are capped at 10000 BP combined.
+type EvaluatorFeeChange @entity(immutable: true) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  feeBP: BigInt!
+  previousFeeBP: BigInt!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+type PauseChange @entity(immutable: true) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  paused: Boolean!
+  account: Account!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# `EmergencyWithdraw`, admin-only and reachable only while paused.
+type EmergencyWithdrawal @entity(immutable: true) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  token: PaymentToken!
+  to: Account!
+  amount: BigInt!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+type Upgrade @entity(immutable: true) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  implementation: Bytes!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---------------------------------------------------------------------------
+# Access control
+# ---------------------------------------------------------------------------
+
+# An AccessControl role. ID: the `bytes32` role identifier.
+type Role @entity(immutable: false) {
+  id: Bytes!
+  protocol: AgenticCommerce!
+  adminRole: Bytes
+  memberCount: BigInt!
+
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+
+  assignments: [RoleAssignment!]! @derivedFrom(field: "role")
+  adminChanges: [RoleAdminChange!]! @derivedFrom(field: "role")
+}
+
+# Current holding state for one (role, account) pair. ID: role + account address.
+# Kept after revocation with `granted: false`, so history is not lost.
+type RoleAssignment @entity(immutable: false) {
+  id: Bytes!
+  role: Role!
+  account: Account!
+  granted: Boolean!
+
+  grantedAt: Timestamp
+  revokedAt: Timestamp
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+
+  changes: [RoleChange!]! @derivedFrom(field: "assignment")
+}
+
+type RoleChange @entity(immutable: true) {
+  id: Bytes!
+  assignment: RoleAssignment!
+  role: Role!
+  account: Account!
+  kind: RoleChangeKind!
+
+  # `renounceRole` produces a revocation whose sender equals the account.
+  sender: Account!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+type RoleAdminChange @entity(immutable: true) {
+  id: Bytes!
+  role: Role!
+  previousAdminRole: Bytes!
+  newAdminRole: Bytes!
+
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---------------------------------------------------------------------------
+# Timeseries and aggregations
+# ---------------------------------------------------------------------------
+
+# One point per job/claim lifecycle event, written as a delta so the aggregations below
+# are pure cumulative sums. Counts only — amounts live in `PaymentFlowPoint`, which is
+# keyed by token so unrelated denominations are never added together.
+type JobActivityPoint @entity(timeseries: true) {
+  id: Int8!
+  timestamp: Timestamp!
+  protocol: AgenticCommerce!
+
+  jobsCreatedDelta: BigInt!
+  jobsFundedDelta: BigInt!
+  jobsSubmittedDelta: BigInt!
+  jobsCompletedDelta: BigInt!
+  jobsRejectedDelta: BigInt!
+  jobsExpiredDelta: BigInt!
+  claimsSubmittedDelta: BigInt!
+  claimsApprovedDelta: BigInt!
+  claimsRejectedDelta: BigInt!
+  settlementsDelta: BigInt!
+}
+
+type ProtocolActivityStats @aggregation(intervals: ["hour", "day"], source: "JobActivityPoint") {
+  id: Int8!
+  timestamp: Timestamp!
+  protocol: AgenticCommerce!
+
+  jobsCreated: BigInt! @aggregate(fn: "sum", arg: "jobsCreatedDelta", cumulative: true)
+  jobsFunded: BigInt! @aggregate(fn: "sum", arg: "jobsFundedDelta", cumulative: true)
+  jobsSubmitted: BigInt! @aggregate(fn: "sum", arg: "jobsSubmittedDelta", cumulative: true)
+  jobsCompleted: BigInt! @aggregate(fn: "sum", arg: "jobsCompletedDelta", cumulative: true)
+  jobsRejected: BigInt! @aggregate(fn: "sum", arg: "jobsRejectedDelta", cumulative: true)
+  jobsExpired: BigInt! @aggregate(fn: "sum", arg: "jobsExpiredDelta", cumulative: true)
+  claimsSubmitted: BigInt! @aggregate(fn: "sum", arg: "claimsSubmittedDelta", cumulative: true)
+  claimsApproved: BigInt! @aggregate(fn: "sum", arg: "claimsApprovedDelta", cumulative: true)
+  claimsRejected: BigInt! @aggregate(fn: "sum", arg: "claimsRejectedDelta", cumulative: true)
+  settlements: BigInt! @aggregate(fn: "sum", arg: "settlementsDelta", cumulative: true)
+}
+
+# One point per money movement, keyed by payment token.
+type PaymentFlowPoint @entity(timeseries: true) {
+  id: Int8!
+  timestamp: Timestamp!
+  protocol: AgenticCommerce!
+  token: PaymentToken!
+
+  fundedDelta: BigInt!
+  settledDelta: BigInt!
+  releasedDelta: BigInt!
+  platformFeeDelta: BigInt!
+  evaluatorFeeDelta: BigInt!
+  refundedDelta: BigInt!
+}
+
+# Per-token flow. Grouped by `token`, so each series stays in one denomination.
+type PaymentTokenFlowStats @aggregation(intervals: ["hour", "day"], source: "PaymentFlowPoint") {
+  id: Int8!
+  timestamp: Timestamp!
+  protocol: AgenticCommerce!
+  token: PaymentToken!
+
+  funded: BigInt! @aggregate(fn: "sum", arg: "fundedDelta", cumulative: true)
+  settled: BigInt! @aggregate(fn: "sum", arg: "settledDelta", cumulative: true)
+  released: BigInt! @aggregate(fn: "sum", arg: "releasedDelta", cumulative: true)
+  platformFees: BigInt! @aggregate(fn: "sum", arg: "platformFeeDelta", cumulative: true)
+  evaluatorFees: BigInt! @aggregate(fn: "sum", arg: "evaluatorFeeDelta", cumulative: true)
+  refunded: BigInt! @aggregate(fn: "sum", arg: "refundedDelta", cumulative: true)
+}
+
+# One point per amount credited to or debited from a participant, keyed by account and
+# token. Field names carry the role, so no role dimension is needed: `paidDelta` is
+# funding sent as client, `earnedDelta` is payout received, `feeEarnedDelta` is platform
+# or evaluator fee received, `refundedDelta` is refund received as client.
+type AccountFlowPoint @entity(timeseries: true) {
+  id: Int8!
+  timestamp: Timestamp!
+  protocol: AgenticCommerce!
+  account: Account!
+  token: PaymentToken!
+
+  paidDelta: BigInt!
+  earnedDelta: BigInt!
+  feeEarnedDelta: BigInt!
+  refundedDelta: BigInt!
+}
+
+type AccountFlowStats @aggregation(intervals: ["hour", "day"], source: "AccountFlowPoint") {
+  id: Int8!
+  timestamp: Timestamp!
+  account: Account!
+  token: PaymentToken!
+
+  paid: BigInt! @aggregate(fn: "sum", arg: "paidDelta", cumulative: true)
+  earned: BigInt! @aggregate(fn: "sum", arg: "earnedDelta", cumulative: true)
+  feeEarned: BigInt! @aggregate(fn: "sum", arg: "feeEarnedDelta", cumulative: true)
+  refunded: BigInt! @aggregate(fn: "sum", arg: "refundedDelta", cumulative: true)
+}
