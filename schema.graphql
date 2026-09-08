@@ -1,0 +1,156 @@
+enum JobStatus {
+  OPEN
+  FUNDED
+  SUBMITTED
+  COMPLETED
+  REJECTED
+  EXPIRED
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum JobEventKind {
+  CREATED
+  PROVIDER_SET
+  PAYOUT_RECEIVER_SET
+  BUDGET_SET
+  FUNDED
+  SUBMITTED
+  COMPLETED
+  REJECTED
+  EXPIRED
+  HOOK_DETACHED
+  CLAIM_SUBMITTED
+  CLAIM_SETTLED
+  CLAIM_APPROVED
+  CLAIM_REJECTED
+  SETTLED
+  PAYMENT_RELEASED
+  PLATFORM_FEE_PAID
+  EVALUATOR_FEE_PAID
+  REFUNDED
+  DISBURSED
+}
+
+type AgenticCommerce @entity(immutable: false) {
+  id: Bytes!
+  network: String!
+  chainId: BigInt!
+  paused: Boolean!
+  implementation: Bytes
+  platformFeeBP: BigInt!
+  platformTreasury: Account
+  evaluatorFeeBP: BigInt!
+  jobCount: BigInt!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+  jobs: [Job!]! @derivedFrom(field: "agenticCommerce")
+  hooks: [HookAllowlistEntry!]! @derivedFrom(field: "agenticCommerce")
+  paymentTokens: [PaymentTokenAllowlistEntry!]! @derivedFrom(field: "agenticCommerce")
+}
+
+type Account @entity(immutable: false) {
+  id: Bytes!
+  clientJobs: [Job!]! @derivedFrom(field: "client")
+  providerJobs: [Job!]! @derivedFrom(field: "provider")
+  evaluatorJobs: [Job!]! @derivedFrom(field: "evaluator")
+  submittedClaims: [Claim!]! @derivedFrom(field: "provider")
+}
+
+type Job @entity(immutable: false) {
+  id: Bytes!
+  agenticCommerce: AgenticCommerce!
+  jobId: BigInt!
+  status: JobStatus!
+  client: Account!
+  provider: Account
+  evaluator: Account!
+  expiresAt: Timestamp!
+  submittedAt: Timestamp
+  budget: BigInt!
+  paymentToken: Bytes
+  hook: Bytes
+  providerAgentId: BigInt!
+  description: String!
+  settledAmount: BigInt!
+  payoutReceiver: Account
+  deliverable: Bytes
+  completionReason: Bytes
+  rejectionReason: Bytes
+  pendingClaim: Claim
+  providerPayment: BigInt!
+  platformFeePaid: BigInt!
+  evaluatorFeePaid: BigInt!
+  refundedAmount: BigInt!
+  createdAt: Timestamp!
+  createdAtBlock: BigInt!
+  createdAtTransaction: Bytes!
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+  claims: [Claim!]! @derivedFrom(field: "job")
+  events: [JobEvent!]! @derivedFrom(field: "job")
+}
+
+type Claim @entity(immutable: false) {
+  id: Bytes!
+  job: Job!
+  provider: Account!
+  status: ClaimStatus!
+  cumulativeAmount: BigInt!
+  delta: BigInt!
+  deliverable: Bytes!
+  optParams: Bytes!
+  resolver: Account
+  resolutionReason: Bytes
+  createdAt: Timestamp!
+  createdAtBlock: BigInt!
+  createdAtTransaction: Bytes!
+  resolvedAt: Timestamp
+  resolvedAtBlock: BigInt
+  resolvedAtTransaction: Bytes
+}
+
+type JobEvent @entity(immutable: true) {
+  id: Bytes!
+  agenticCommerce: AgenticCommerce!
+  job: Job!
+  kind: JobEventKind!
+  actor: Account
+  address: Bytes
+  token: Bytes
+  amount: BigInt
+  cumulativeAmount: BigInt
+  delta: BigInt
+  data: Bytes
+  selector: Bytes
+  optParams: Bytes
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+type HookAllowlistEntry @entity(immutable: false) {
+  id: Bytes!
+  agenticCommerce: AgenticCommerce!
+  hook: Bytes!
+  allowed: Boolean!
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+}
+
+type PaymentTokenAllowlistEntry @entity(immutable: false) {
+  id: Bytes!
+  agenticCommerce: AgenticCommerce!
+  token: Bytes!
+  allowed: Boolean!
+  updatedAt: Timestamp!
+  updatedAtBlock: BigInt!
+  updatedAtTransaction: Bytes!
+}

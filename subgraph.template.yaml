@@ -1,18 +1,16 @@
 specVersion: 1.3.0
 schema:
   file: ../../schema.graphql
-features:
-  - fullTextSearch
 indexerHints:
   prune: auto
 dataSources:
   - kind: ethereum
     name: AgenticCommerce
-    network: { { network } }
+    network: {{network}}
     source:
       address: "{{agenticCommerceAddress}}"
       abi: AgenticCommerce
-      startBlock: { { agenticCommerceStartBlock } }
+      startBlock: {{agenticCommerceStartBlock}}
     context:
       chainId:
         type: BigInt
@@ -22,9 +20,71 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        -
+        - AgenticCommerce
+        - Account
+        - Job
+        - Claim
+        - JobEvent
+        - HookAllowlistEntry
+        - PaymentTokenAllowlistEntry
       abis:
         - name: AgenticCommerce
           file: ../../abis/AgenticCommerce.json
       eventHandlers:
+        - event: JobCreated(indexed uint256,indexed address,indexed address,address,uint48,address)
+          handler: handleJobCreated
+          calls:
+            getJob: AgenticCommerce[event.address].getJob(event.params.jobId)
+        - event: ProviderSet(indexed uint256,indexed address,uint256)
+          handler: handleProviderSet
+        - event: PayoutReceiverSet(indexed uint256,indexed address)
+          handler: handlePayoutReceiverSet
+        - event: BudgetSet(indexed uint256,indexed address,uint256)
+          handler: handleBudgetSet
+        - event: JobFunded(indexed uint256,indexed address,uint256)
+          handler: handleJobFunded
+        - event: JobSubmitted(indexed uint256,indexed address,bytes32)
+          handler: handleJobSubmitted
+        - event: JobCompleted(indexed uint256,indexed address,bytes32)
+          handler: handleJobCompleted
+        - event: JobRejected(indexed uint256,indexed address,bytes32)
+          handler: handleJobRejected
+        - event: JobExpired(indexed uint256)
+          handler: handleJobExpired
+        - event: HookDetached(indexed uint256,indexed address)
+          handler: handleHookDetached
+        - event: ClaimSubmitted(indexed uint256,indexed address,uint256,uint256,bytes32,bytes)
+          handler: handleClaimSubmitted
+        - event: ClaimSettled(indexed uint256,indexed address,uint256,uint256,bytes32)
+          handler: handleClaimSettled
+        - event: ClaimApproved(indexed uint256,indexed address,uint256,uint256,bytes32)
+          handler: handleClaimApproved
+        - event: ClaimRejected(indexed uint256,indexed address,bytes32)
+          handler: handleClaimRejected
+        - event: Settled(indexed uint256,uint256,uint256)
+          handler: handleSettled
+        - event: PaymentReleased(indexed uint256,indexed address,uint256)
+          handler: handlePaymentReleased
+        - event: PlatformFeePaid(indexed uint256,indexed address,uint256)
+          handler: handlePlatformFeePaid
+        - event: EvaluatorFeePaid(indexed uint256,indexed address,uint256)
+          handler: handleEvaluatorFeePaid
+        - event: Refunded(indexed uint256,indexed address,uint256)
+          handler: handleRefunded
+        - event: Disbursed(indexed uint256,indexed address,bytes4,uint256)
+          handler: handleDisbursed
+        - event: HookWhitelistUpdated(indexed address,bool)
+          handler: handleHookWhitelistUpdated
+        - event: PaymentTokenAllowlistUpdated(indexed address,bool)
+          handler: handlePaymentTokenAllowlistUpdated
+        - event: PlatformFeeUpdated(uint256,indexed address)
+          handler: handlePlatformFeeUpdated
+        - event: EvaluatorFeeUpdated(uint256)
+          handler: handleEvaluatorFeeUpdated
+        - event: Paused(address)
+          handler: handlePaused
+        - event: Unpaused(address)
+          handler: handleUnpaused
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
       file: ../../src/mapping.ts
