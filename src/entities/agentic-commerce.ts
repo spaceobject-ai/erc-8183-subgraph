@@ -1,5 +1,7 @@
-import { BigInt, dataSource, ethereum } from "@graphprotocol/graph-ts";
+import { Address, BigInt, dataSource, ethereum } from "@graphprotocol/graph-ts";
+import { AgenticCommerce as AgenticCommerceContract } from "../../generated/AgenticCommerce/AgenticCommerce";
 import { AgenticCommerce } from "../../generated/schema";
+import { getOrCreateAccount } from "./account";
 
 export function getOrCreateAgenticCommerce(event: ethereum.Event): AgenticCommerce {
   let agenticCommerce = AgenticCommerce.load(event.address);
@@ -14,6 +16,12 @@ export function getOrCreateAgenticCommerce(event: ethereum.Event): AgenticCommer
   agenticCommerce.jobCount = BigInt.zero();
   agenticCommerce.createdAt = event.block.timestamp.toI64();
   agenticCommerce.updatedAt = event.block.timestamp.toI64();
+
+  const treasury = AgenticCommerceContract.bind(event.address).try_platformTreasury();
+  if (!treasury.reverted && !treasury.value.equals(Address.zero())) {
+    agenticCommerce.platformTreasury = getOrCreateAccount(treasury.value).id;
+  }
+
   agenticCommerce.save();
   return agenticCommerce;
 }

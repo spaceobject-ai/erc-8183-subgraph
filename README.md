@@ -101,6 +101,9 @@ bun run deploy -- your-chain --build-only
 vp run test
 ```
 
+This builds the Sepolia subgraph first so Matchstick can read
+`.generated/sepolia/subgraph.yaml`.
+
 Matchstick tests cover pure ID logic, the shared admin pause mutation, and
 early-return guards. Saving entities with GraphQL `Timestamp` fields still crashes Matchstick's test runner
 ([LimeChain/matchstick#433](https://github.com/LimeChain/matchstick/issues/433)).
@@ -127,12 +130,17 @@ These are working notes, not a spec. Read `schema.graphql` and `src/` before
 depending on a detail.
 
 - `AgenticCommerce`, `Account`, `Job`, `Claim`, and the allowlist entries are
-  mutable. `JobEvent` is the immutable escrow audit log. Reverse lookups use
-  `@derivedFrom`, so parent entities do not store growing arrays.
+  mutable. `JobEvent` is the immutable escrow audit log. `EmergencyWithdrawal`
+  records admin withdrawals that leave the contract outside any job. Reverse
+  lookups use `@derivedFrom`, so parent entities do not store growing arrays.
 - `JobCreated` does not emit the description or initial provider agent ID.
-  Its handler uses the manifest's declared `getJob` call to store both.
+  Its handler calls `getJob` on the contract to store both.
+- The first event for a contract also reads `platformTreasury`. `initialize`
+  sets that address without a tracked event, so later `PlatformFeeUpdated`
+  rows are not required to populate it.
 - Claim handlers retain the submitted claim, its resolver, and the resolution
   transaction. Job fields also track cumulative settlement, provider payment,
   fees, and refunds.
+- Native ETH emergency withdrawals use the zero token address.
 
 If a note disagrees with the mapping, trust the mapping. These notes drift.

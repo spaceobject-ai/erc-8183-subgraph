@@ -1,4 +1,5 @@
 import {
+  EmergencyWithdraw,
   EvaluatorFeeUpdated,
   HookWhitelistUpdated,
   Paused,
@@ -7,7 +8,11 @@ import {
   Unpaused,
   Upgraded,
 } from "../../../generated/AgenticCommerce/AgenticCommerce";
-import { HookAllowlistEntry, PaymentTokenAllowlistEntry } from "../../../generated/schema";
+import {
+  EmergencyWithdrawal,
+  HookAllowlistEntry,
+  PaymentTokenAllowlistEntry,
+} from "../../../generated/schema";
 import { getOrCreateAccount } from "../../entities/account";
 import { getOrCreateAgenticCommerce, updatePauseState } from "../../entities/agentic-commerce";
 import { scopedAddressId } from "../../utils/ids";
@@ -81,6 +86,22 @@ export function handleUnpaused(event: Unpaused): void {
 export function handleUpgraded(event: Upgraded): void {
   const agenticCommerce = getOrCreateAgenticCommerce(event);
   agenticCommerce.implementation = event.params.implementation;
+  agenticCommerce.updatedAt = event.block.timestamp.toI64();
+  agenticCommerce.save();
+}
+
+export function handleEmergencyWithdraw(event: EmergencyWithdraw): void {
+  const agenticCommerce = getOrCreateAgenticCommerce(event);
+  const record = new EmergencyWithdrawal(event.transaction.hash.concatI32(event.logIndex.toI32()));
+  record.agenticCommerce = agenticCommerce.id;
+  record.token = event.params.token;
+  record.to = getOrCreateAccount(event.params.to).id;
+  record.amount = event.params.amount;
+  record.blockNumber = event.block.number;
+  record.timestamp = event.block.timestamp.toI64();
+  record.transactionHash = event.transaction.hash;
+  record.save();
+
   agenticCommerce.updatedAt = event.block.timestamp.toI64();
   agenticCommerce.save();
 }

@@ -25,6 +25,7 @@ export {
   handleSettled,
 } from "./handlers/agentic-commerce/claim";
 export {
+  handleEmergencyWithdraw,
   handleEvaluatorFeeUpdated,
   handleHookWhitelistUpdated,
   handlePaused,

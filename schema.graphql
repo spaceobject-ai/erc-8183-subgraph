@@ -49,6 +49,7 @@ type AgenticCommerce @entity(immutable: false) {
   createdAt: Timestamp!
   updatedAt: Timestamp!
   jobs: [Job!]! @derivedFrom(field: "agenticCommerce")
+  emergencyWithdrawals: [EmergencyWithdrawal!]! @derivedFrom(field: "agenticCommerce")
   hooks: [HookAllowlistEntry!]! @derivedFrom(field: "agenticCommerce")
   paymentTokens: [PaymentTokenAllowlistEntry!]! @derivedFrom(field: "agenticCommerce")
 }
@@ -133,6 +134,17 @@ type JobEvent @entity(immutable: true) {
   timestamp: Timestamp!
   transactionHash: Bytes!
   logIndex: BigInt!
+}
+
+type EmergencyWithdrawal @entity(immutable: true) {
+  id: Bytes!
+  agenticCommerce: AgenticCommerce!
+  token: Bytes!
+  to: Account!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: Timestamp!
+  transactionHash: Bytes!
 }
 
 type HookAllowlistEntry @entity(immutable: false) {

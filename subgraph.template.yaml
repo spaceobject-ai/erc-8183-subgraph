@@ -25,6 +25,7 @@ dataSources:
         - Job
         - Claim
         - JobEvent
+        - EmergencyWithdrawal
         - HookAllowlistEntry
         - PaymentTokenAllowlistEntry
       abis:
@@ -33,8 +34,6 @@ dataSources:
       eventHandlers:
         - event: JobCreated(indexed uint256,indexed address,indexed address,address,uint48,address)
           handler: handleJobCreated
-          calls:
-            getJob: AgenticCommerce[event.address].getJob(event.params.jobId)
         - event: ProviderSet(indexed uint256,indexed address,uint256)
           handler: handleProviderSet
         - event: PayoutReceiverSet(indexed uint256,indexed address)
@@ -87,4 +86,6 @@ dataSources:
           handler: handleUnpaused
         - event: Upgraded(indexed address)
           handler: handleUpgraded
+        - event: EmergencyWithdraw(indexed address,indexed address,uint256)
+          handler: handleEmergencyWithdraw
       file: ../../src/mapping.ts
