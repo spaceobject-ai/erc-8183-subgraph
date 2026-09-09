@@ -32,7 +32,7 @@ dataSources:
         - name: AgenticCommerce
           file: ../../abis/AgenticCommerce.json
       eventHandlers:
-        - event: JobCreated(indexed uint256,indexed address,indexed address,address,uint48,address)
+        - event: JobCreated(indexed uint256,indexed address,indexed address,address,uint48,address,uint256,string)
           handler: handleJobCreated
         - event: ProviderSet(indexed uint256,indexed address,uint256)
           handler: handleProviderSet
@@ -40,7 +40,7 @@ dataSources:
           handler: handlePayoutReceiverSet
         - event: BudgetSet(indexed uint256,indexed address,uint256)
           handler: handleBudgetSet
-        - event: JobFunded(indexed uint256,indexed address,uint256)
+        - event: JobFunded(indexed uint256,indexed address,indexed address,uint256)
           handler: handleJobFunded
         - event: JobSubmitted(indexed uint256,indexed address,bytes32)
           handler: handleJobSubmitted
@@ -60,17 +60,17 @@ dataSources:
           handler: handleClaimApproved
         - event: ClaimRejected(indexed uint256,indexed address,bytes32)
           handler: handleClaimRejected
-        - event: Settled(indexed uint256,uint256,uint256)
+        - event: Settled(indexed uint256,indexed address,uint256,uint256)
           handler: handleSettled
-        - event: PaymentReleased(indexed uint256,indexed address,uint256)
+        - event: PaymentReleased(indexed uint256,indexed address,indexed address,uint256)
           handler: handlePaymentReleased
-        - event: PlatformFeePaid(indexed uint256,indexed address,uint256)
+        - event: PlatformFeePaid(indexed uint256,indexed address,indexed address,uint256)
           handler: handlePlatformFeePaid
-        - event: EvaluatorFeePaid(indexed uint256,indexed address,uint256)
+        - event: EvaluatorFeePaid(indexed uint256,indexed address,indexed address,uint256)
           handler: handleEvaluatorFeePaid
-        - event: Refunded(indexed uint256,indexed address,uint256)
+        - event: Refunded(indexed uint256,indexed address,indexed address,uint256)
           handler: handleRefunded
-        - event: Disbursed(indexed uint256,indexed address,bytes4,uint256)
+        - event: Disbursed(indexed uint256,indexed address,indexed address,bytes4,uint256)
           handler: handleDisbursed
         - event: HookWhitelistUpdated(indexed address,bool)
           handler: handleHookWhitelistUpdated

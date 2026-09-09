@@ -111,6 +111,7 @@ export function handleSettled(event: Settled): void {
   job.save();
 
   const record = createJobEvent(event, job, "SETTLED");
+  record.token = event.params.token;
   record.cumulativeAmount = event.params.cumulativeAmount;
   record.delta = event.params.delta;
   record.save();

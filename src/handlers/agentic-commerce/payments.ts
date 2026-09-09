@@ -17,6 +17,7 @@ export function handlePaymentReleased(event: PaymentReleased): void {
 
   const record = createJobEvent(event, job, "PAYMENT_RELEASED");
   record.actor = getOrCreateAccount(event.params.recipient).id;
+  record.token = event.params.token;
   record.amount = event.params.amount;
   record.save();
 }
@@ -30,6 +31,7 @@ export function handlePlatformFeePaid(event: PlatformFeePaid): void {
 
   const record = createJobEvent(event, job, "PLATFORM_FEE_PAID");
   record.actor = getOrCreateAccount(event.params.platformTreasury).id;
+  record.token = event.params.token;
   record.amount = event.params.amount;
   record.save();
 }
@@ -43,6 +45,7 @@ export function handleEvaluatorFeePaid(event: EvaluatorFeePaid): void {
 
   const record = createJobEvent(event, job, "EVALUATOR_FEE_PAID");
   record.actor = getOrCreateAccount(event.params.evaluator).id;
+  record.token = event.params.token;
   record.amount = event.params.amount;
   record.save();
 }
@@ -56,6 +59,7 @@ export function handleRefunded(event: Refunded): void {
 
   const record = createJobEvent(event, job, "REFUNDED");
   record.actor = getOrCreateAccount(event.params.client).id;
+  record.token = event.params.token;
   record.amount = event.params.amount;
   record.save();
 }
@@ -65,6 +69,7 @@ export function handleDisbursed(event: Disbursed): void {
   if (job == null) return;
   const record = createJobEvent(event, job, "DISBURSED");
   record.actor = getOrCreateAccount(event.params.receiver).id;
+  record.token = event.params.token;
   record.selector = event.params.selector;
   record.amount = event.params.amount;
   record.save();

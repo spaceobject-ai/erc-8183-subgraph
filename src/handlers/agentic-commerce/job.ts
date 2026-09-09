@@ -1,7 +1,6 @@
 import { Address, BigInt } from "@graphprotocol/graph-ts";
 import {
   BudgetSet,
-  AgenticCommerce as AgenticCommerceContract,
   HookDetached,
   JobCompleted,
   JobCreated,
@@ -22,7 +21,6 @@ export function handleJobCreated(event: JobCreated): void {
   const agenticCommerce = getOrCreateAgenticCommerce(event);
   const client = getOrCreateAccount(event.params.client);
   const evaluator = getOrCreateAccount(event.params.evaluator);
-  const result = AgenticCommerceContract.bind(event.address).try_getJob(event.params.jobId);
 
   const job = new Job(jobEntityId(event.address, event.params.jobId));
   job.agenticCommerce = agenticCommerce.id;
@@ -32,8 +30,8 @@ export function handleJobCreated(event: JobCreated): void {
   job.evaluator = evaluator.id;
   job.expiresAt = event.params.expiredAt.toI64();
   job.budget = BigInt.zero();
-  job.providerAgentId = BigInt.zero();
-  job.description = "";
+  job.providerAgentId = event.params.providerAgentId;
+  job.description = event.params.description;
   job.settledAmount = BigInt.zero();
   job.providerPayment = BigInt.zero();
   job.platformFeePaid = BigInt.zero();
@@ -48,13 +46,6 @@ export function handleJobCreated(event: JobCreated): void {
     job.provider = getOrCreateAccount(event.params.provider).id;
   }
   if (!event.params.hook.equals(Address.zero())) job.hook = event.params.hook;
-  if (!result.reverted) {
-    job.providerAgentId = result.value.providerAgentId;
-    job.description = result.value.description;
-    if (!result.value.payoutReceiver.equals(Address.zero())) {
-      job.payoutReceiver = getOrCreateAccount(result.value.payoutReceiver).id;
-    }
-  }
   job.save();
 
   agenticCommerce.jobCount = agenticCommerce.jobCount.plus(BigInt.fromI32(1));
@@ -121,6 +112,7 @@ export function handleJobFunded(event: JobFunded): void {
 
   const record = createJobEvent(event, job, "FUNDED");
   record.actor = getOrCreateAccount(event.params.client).id;
+  record.token = event.params.token;
   record.amount = event.params.amount;
   record.save();
 }

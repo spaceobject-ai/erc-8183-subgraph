@@ -21,6 +21,12 @@ describe("Agentic Commerce payment handlers", () => {
           Address.fromString("0x0000000000000000000000000000000000000002"),
         ),
       ),
+      new ethereum.EventParam(
+        "token",
+        ethereum.Value.fromAddress(
+          Address.fromString("0x0000000000000000000000000000000000000004"),
+        ),
+      ),
       new ethereum.EventParam("amount", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(500))),
     ];
 

@@ -1,8 +1,8 @@
 # ERC-8183 subgraph
 
-Indexes an ERC-8183 Agentic Commerce contract. Ethereum Sepolia is the
-default chain. `chain.config.json` also ships Ethereum, Base, Base Sepolia,
-Arc, and Arc Testnet as examples you can copy.
+Indexes SpaceObject's ERC-8183 Agentic Commerce contract. Ethereum Sepolia
+is the default chain. `chain.config.json` also ships Ethereum, Base, Base
+Sepolia, Arc, and Arc Testnet as examples you can copy.
 
 The contract has no canonical address. Set the Agentic Commerce address and
 deployment block separately for every chain before deploying.
@@ -133,8 +133,12 @@ depending on a detail.
   mutable. `JobEvent` is the immutable escrow audit log. `EmergencyWithdrawal`
   records admin withdrawals that leave the contract outside any job. Reverse
   lookups use `@derivedFrom`, so parent entities do not store growing arrays.
-- `JobCreated` does not emit the description or initial provider agent ID.
-  Its handler calls `getJob` on the contract to store both.
+- `JobCreated` includes `description` and `providerAgentId`. The handler
+  stores both from the event. `providerAgentId` is 0 when the provider is
+  unset at creation. `ProviderSet` covers the assign-later path.
+- Value-moving events (`JobFunded`, `PaymentReleased`, `PlatformFeePaid`,
+  `EvaluatorFeePaid`, `Refunded`, `Disbursed`) and `Settled` include `token`.
+  You do not need to join `BudgetSet` to know which asset moved.
 - The first event for a contract also reads `platformTreasury`. `initialize`
   sets that address without a tracked event, so later `PlatformFeeUpdated`
   rows are not required to populate it.
