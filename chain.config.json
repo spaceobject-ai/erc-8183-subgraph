@@ -54,8 +54,8 @@
     "chainId": 5042002,
     "contracts": {
       "agenticCommerce": {
-        "address": "0x0747EEf0706327138c69792bF28Cd525089e4583",
-        "startBlock": 29241340
+        "address": "0x85a21c175655bebc21f4727be480fec57cd18b1a",
+        "startBlock": 61172860
       }
     }
   }
