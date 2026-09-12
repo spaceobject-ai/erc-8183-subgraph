@@ -1,7 +1,24 @@
-import { afterEach, assert, clearStore, describe, newMockEvent, test } from "matchstick-as";
-import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
+import {
+  afterEach,
+  assert,
+  beforeAll,
+  clearStore,
+  dataSourceMock,
+  describe,
+  newMockEvent,
+  test,
+} from "matchstick-as";
+import { Address, BigInt, Bytes, DataSourceContext, ethereum } from "@graphprotocol/graph-ts";
 import { BudgetSet } from "../../../generated/AgenticCommerce/AgenticCommerce";
 import { handleBudgetSet } from "./job";
+
+beforeAll(() => {
+  // Mirrors the `chainId` context that subgraph.template.yaml sets for the
+  // AgenticCommerce data source; job entity IDs are chain-scoped.
+  const context = new DataSourceContext();
+  context.setBigInt("chainId", BigInt.fromI32(11155111));
+  dataSourceMock.setReturnValues(contractAddress().toHexString(), "sepolia", context);
+});
 
 describe("Agentic Commerce job handlers", () => {
   afterEach(() => {

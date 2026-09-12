@@ -13,16 +13,15 @@ import {
 } from "../../../generated/AgenticCommerce/AgenticCommerce";
 import { Job } from "../../../generated/schema";
 import { getOrCreateAccount } from "../../entities/account";
-import { getOrCreateAgenticCommerce } from "../../entities/agentic-commerce";
-import { createJobEvent, loadJob, touchJob } from "../../entities/job";
-import { jobEntityId } from "../../utils/ids";
+import { getOrCreateAgenticCommerce, contextChainId } from "../../entities/agentic-commerce";
+import { createJobEvent, getJob, jobEntityId, touchJob } from "../../entities/job";
 
 export function handleJobCreated(event: JobCreated): void {
   const agenticCommerce = getOrCreateAgenticCommerce(event);
   const client = getOrCreateAccount(event.params.client);
   const evaluator = getOrCreateAccount(event.params.evaluator);
 
-  const job = new Job(jobEntityId(event.address, event.params.jobId));
+  const job = new Job(jobEntityId(agenticCommerce.chainId, event.address, event.params.jobId));
   job.agenticCommerce = agenticCommerce.id;
   job.jobId = event.params.jobId;
   job.status = "OPEN";
@@ -59,7 +58,7 @@ export function handleJobCreated(event: JobCreated): void {
 }
 
 export function handleProviderSet(event: ProviderSet): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   const provider = getOrCreateAccount(event.params.provider);
   job.provider = provider.id;
@@ -75,7 +74,7 @@ export function handleProviderSet(event: ProviderSet): void {
 }
 
 export function handlePayoutReceiverSet(event: PayoutReceiverSet): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.payoutReceiver = null;
   if (!event.params.payoutReceiver.equals(Address.zero())) {
@@ -90,7 +89,7 @@ export function handlePayoutReceiverSet(event: PayoutReceiverSet): void {
 }
 
 export function handleBudgetSet(event: BudgetSet): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.paymentToken = event.params.token;
   job.budget = event.params.amount;
@@ -104,7 +103,7 @@ export function handleBudgetSet(event: BudgetSet): void {
 }
 
 export function handleJobFunded(event: JobFunded): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.status = "FUNDED";
   touchJob(job, event);
@@ -118,7 +117,7 @@ export function handleJobFunded(event: JobFunded): void {
 }
 
 export function handleJobSubmitted(event: JobSubmitted): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.status = "SUBMITTED";
   job.submittedAt = event.block.timestamp.toI64();
@@ -133,7 +132,7 @@ export function handleJobSubmitted(event: JobSubmitted): void {
 }
 
 export function handleJobCompleted(event: JobCompleted): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.status = "COMPLETED";
   job.completionReason = event.params.reason;
@@ -147,7 +146,7 @@ export function handleJobCompleted(event: JobCompleted): void {
 }
 
 export function handleJobRejected(event: JobRejected): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.status = "REJECTED";
   job.rejectionReason = event.params.reason;
@@ -161,7 +160,7 @@ export function handleJobRejected(event: JobRejected): void {
 }
 
 export function handleJobExpired(event: JobExpired): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.status = "EXPIRED";
   touchJob(job, event);
@@ -170,7 +169,7 @@ export function handleJobExpired(event: JobExpired): void {
 }
 
 export function handleHookDetached(event: HookDetached): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.hook = null;
   touchJob(job, event);

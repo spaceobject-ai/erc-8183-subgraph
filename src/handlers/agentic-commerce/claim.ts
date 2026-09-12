@@ -7,10 +7,11 @@ import {
 } from "../../../generated/AgenticCommerce/AgenticCommerce";
 import { Claim } from "../../../generated/schema";
 import { getOrCreateAccount } from "../../entities/account";
-import { createJobEvent, loadJob, touchJob } from "../../entities/job";
+import { contextChainId } from "../../entities/agentic-commerce";
+import { createJobEvent, getJob, jobEntityId, touchJob } from "../../entities/job";
 
 export function handleClaimSubmitted(event: ClaimSubmitted): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   const provider = getOrCreateAccount(event.params.provider);
   const claim = new Claim(event.transaction.hash.concatI32(event.logIndex.toI32()));
@@ -40,7 +41,7 @@ export function handleClaimSubmitted(event: ClaimSubmitted): void {
 }
 
 export function handleClaimSettled(event: ClaimSettled): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   const record = createJobEvent(event, job, "CLAIM_SETTLED");
   record.actor = getOrCreateAccount(event.params.settler).id;
@@ -51,7 +52,7 @@ export function handleClaimSettled(event: ClaimSettled): void {
 }
 
 export function handleClaimApproved(event: ClaimApproved): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   const approver = getOrCreateAccount(event.params.approver);
   if (job.pendingClaim) {
@@ -78,7 +79,7 @@ export function handleClaimApproved(event: ClaimApproved): void {
 }
 
 export function handleClaimRejected(event: ClaimRejected): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   const rejector = getOrCreateAccount(event.params.rejector);
   if (job.pendingClaim) {
@@ -104,7 +105,7 @@ export function handleClaimRejected(event: ClaimRejected): void {
 }
 
 export function handleSettled(event: Settled): void {
-  const job = loadJob(event.address, event.params.jobId);
+  const job = getJob(jobEntityId(contextChainId(), event.address, event.params.jobId));
   if (job == null) return;
   job.settledAmount = event.params.cumulativeAmount;
   touchJob(job, event);

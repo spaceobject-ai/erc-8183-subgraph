@@ -1,7 +1,26 @@
-import { afterEach, assert, clearStore, describe, newMockEvent, test } from "matchstick-as";
-import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
+import {
+  afterEach,
+  assert,
+  beforeAll,
+  clearStore,
+  dataSourceMock,
+  describe,
+  newMockEvent,
+  test,
+} from "matchstick-as";
+import { Address, BigInt, DataSourceContext, ethereum } from "@graphprotocol/graph-ts";
 import { PaymentReleased } from "../../../generated/AgenticCommerce/AgenticCommerce";
 import { handlePaymentReleased } from "./payments";
+
+const CONTRACT = Address.fromString("0x0747eef0706327138c69792bf28cd525089e4583");
+
+beforeAll(() => {
+  // Mirrors the `chainId` context that subgraph.template.yaml sets for the
+  // AgenticCommerce data source; job entity IDs are chain-scoped.
+  const context = new DataSourceContext();
+  context.setBigInt("chainId", BigInt.fromI32(11155111));
+  dataSourceMock.setReturnValues(CONTRACT.toHexString(), "sepolia", context);
+});
 
 describe("Agentic Commerce payment handlers", () => {
   afterEach(() => {
@@ -12,7 +31,7 @@ describe("Agentic Commerce payment handlers", () => {
   // missing-job guard without saving entities that contain Timestamp fields.
   test("ignores a payment for an unknown job", () => {
     const event = changetype<PaymentReleased>(newMockEvent());
-    event.address = Address.fromString("0x0747eef0706327138c69792bf28cd525089e4583");
+    event.address = CONTRACT;
     event.parameters = [
       new ethereum.EventParam("jobId", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))),
       new ethereum.EventParam(
