@@ -1,15 +1,25 @@
-import { Address, BigInt, ethereum, log } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes, ethereum, log } from "@graphprotocol/graph-ts";
 import { Job, JobEvent } from "../../generated/schema";
-import { jobEntityId } from "../utils/ids";
 
-export function loadJob(contract: Address, jobId: BigInt): Job | null {
-  const job = Job.load(jobEntityId(contract, jobId));
-  if (job != null) return job;
-  log.warning("Event for unknown job {} on Agentic Commerce contract {}", [
-    jobId.toString(),
-    contract.toHexString(),
-  ]);
-  return null;
+/**
+ * Builds the `Job` entity ID: UTF-8 bytes of
+ * "<chainId>:<contract address>:<jobId>" (schema.graphql's `Job` comment).
+ * Same chain ID and ":" reasoning as `agenticCommerceEntityId` in
+ * ./agentic-commerce.ts: `chainId` and `jobId` are variable-length decimal
+ * strings, so a delimiter keeps the encoding unambiguous.
+ */
+export function jobEntityId(chainId: BigInt, contract: Address, jobId: BigInt): Bytes {
+  return Bytes.fromUTF8(chainId.toString() + ":" + contract.toHexString() + ":" + jobId.toString());
+}
+
+/**
+ * Loads a `Job` by entity ID (build it with `jobEntityId`), logging a warning
+ * when the job was never created so handlers can simply return.
+ */
+export function getJob(id: Bytes): Job | null {
+  const job = Job.load(id);
+  if (job == null) log.warning("Event for unknown job {}", [id.toString()]);
+  return job;
 }
 
 export function touchJob(job: Job, event: ethereum.Event): void {

@@ -133,6 +133,12 @@ depending on a detail.
   mutable. `JobEvent` is the immutable escrow audit log. `EmergencyWithdrawal`
   records admin withdrawals that leave the contract outside any job. Reverse
   lookups use `@derivedFrom`, so parent entities do not store growing arrays.
+- `AgenticCommerce` and `Job` IDs are UTF-8 strings that start with the chain
+  ID (`"<chainId>:<contract>"` and `"<chainId>:<contract>:<jobId>"`), matching
+  the ERC-8004 subgraph's chain-scoped ID scheme so cross-deployment consumers
+  never collide when the contract deploys at the same address on several
+  chains. Allowlist entry IDs append the raw hook or token address to the
+  chain-scoped `AgenticCommerce` ID.
 - `JobCreated` does not emit the description or initial provider agent ID.
   Its handler calls `getJob` on the contract to store both.
 - The first event for a contract also reads `platformTreasury`. `initialize`

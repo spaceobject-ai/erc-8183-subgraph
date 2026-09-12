@@ -15,11 +15,14 @@ import {
 } from "../../../generated/schema";
 import { getOrCreateAccount } from "../../entities/account";
 import { getOrCreateAgenticCommerce, updatePauseState } from "../../entities/agentic-commerce";
-import { scopedAddressId } from "../../utils/ids";
 
 export function handleHookWhitelistUpdated(event: HookWhitelistUpdated): void {
   const agenticCommerce = getOrCreateAgenticCommerce(event);
-  const id = scopedAddressId(event.address, event.params.hook);
+  // The AgenticCommerce entity ID is already chain-scoped and the hook
+  // address is fixed-width, so concatenation alone is a collision-free ID:
+  // unlike `jobEntityId` in ../../entities/job.ts, no delimiter is needed
+  // before a single fixed-length component.
+  const id = agenticCommerce.id.concat(event.params.hook);
   let entry = HookAllowlistEntry.load(id);
   if (entry == null) {
     entry = new HookAllowlistEntry(id);
@@ -38,7 +41,8 @@ export function handleHookWhitelistUpdated(event: HookWhitelistUpdated): void {
 
 export function handlePaymentTokenAllowlistUpdated(event: PaymentTokenAllowlistUpdated): void {
   const agenticCommerce = getOrCreateAgenticCommerce(event);
-  const id = scopedAddressId(event.address, event.params.token);
+  // Same chain-scoped concatenation scheme as the hook allowlist above.
+  const id = agenticCommerce.id.concat(event.params.token);
   let entry = PaymentTokenAllowlistEntry.load(id);
   if (entry == null) {
     entry = new PaymentTokenAllowlistEntry(id);

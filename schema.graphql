@@ -36,6 +36,13 @@ enum JobEventKind {
   DISBURSED
 }
 
+# Contract-level state is useful for discovery pages and protocol counters.
+# ID: UTF-8 bytes of "<chainId>:<contract address>" (see
+# `agenticCommerceEntityId` in src/entities/agentic-commerce.ts). The chain ID
+# keeps IDs globally unique when the contract deploys at the same address on
+# several chains (see chain.config.json), matching the ERC-8004 subgraph's
+# chain-scoped ID scheme so cross-deployment consumers never collide on
+# byte-identical IDs.
 type AgenticCommerce @entity(immutable: false) {
   id: Bytes!
   network: String!
@@ -62,6 +69,9 @@ type Account @entity(immutable: false) {
   submittedClaims: [Claim!]! @derivedFrom(field: "provider")
 }
 
+# Mutable current state of one escrow job.
+# ID: UTF-8 bytes of "<chainId>:<contract address>:<jobId>" (see `jobEntityId`
+# in src/entities/job.ts).
 type Job @entity(immutable: false) {
   id: Bytes!
   agenticCommerce: AgenticCommerce!
@@ -147,6 +157,8 @@ type EmergencyWithdrawal @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
+# ID: the chain-scoped `AgenticCommerce` entity ID + the hook address. The
+# appended address is fixed-width, so no delimiter is needed.
 type HookAllowlistEntry @entity(immutable: false) {
   id: Bytes!
   agenticCommerce: AgenticCommerce!
@@ -157,6 +169,7 @@ type HookAllowlistEntry @entity(immutable: false) {
   updatedAtTransaction: Bytes!
 }
 
+# ID: same chain-scoped concatenation scheme as `HookAllowlistEntry` above.
 type PaymentTokenAllowlistEntry @entity(immutable: false) {
   id: Bytes!
   agenticCommerce: AgenticCommerce!
